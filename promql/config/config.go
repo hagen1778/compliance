@@ -13,7 +13,6 @@ type Config struct {
 	ReferenceTargetConfig TargetConfig        `yaml:"reference_target_config"`
 	TestTargetConfig      TargetConfig        `yaml:"test_target_config"`
 	QueryTweaks           []*QueryTweak       `yaml:"query_tweaks"`
-	TestCases             []*TestCase         `yaml:"test_cases"`
 	QueryTimeParameters   QueryTimeParameters `yaml:"query_time_parameters"`
 }
 
@@ -48,6 +47,10 @@ type AdjustValueTolerance struct {
 	Margin   *float64 `yaml:"margin" json:"margin,omitempty"`
 }
 
+type TestCasesConfig struct {
+	TestCases []*TestCase `yaml:"test_cases"`
+}
+
 // TestCase represents a given query (pattern) to be tested.
 type TestCase struct {
 	Query          string   `yaml:"query"`
@@ -72,6 +75,29 @@ func LoadFromFile(filename string) (*Config, error) {
 // Load parses the YAML input into a Config.
 func Load(content []byte) (*Config, error) {
 	cfg := &Config{}
+	err := yaml.UnmarshalStrict(content, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// LoadTestCasesFromFile parses the given YAML file into a TestCasesConfig.
+func LoadTestCasesFromFile(filename string) (*TestCasesConfig, error) {
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := LoadTestCases(content)
+	if err != nil {
+		return nil, errors.Wrapf(err, "parsing YAML file %s", filename)
+	}
+	return cfg, nil
+}
+
+// LoadTestCases parses the YAML input into a Config.
+func LoadTestCases(content []byte) (*TestCasesConfig, error) {
+	cfg := &TestCasesConfig{}
 	err := yaml.UnmarshalStrict(content, cfg)
 	if err != nil {
 		return nil, err

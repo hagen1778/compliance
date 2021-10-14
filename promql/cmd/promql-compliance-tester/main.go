@@ -4,6 +4,7 @@ import (
 	"flag"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -55,6 +56,7 @@ func (rt roundTripperWithSettings) RoundTrip(req *http.Request) (*http.Response,
 
 func main() {
 	configFile := flag.String("config-file", "promql-compliance-tester.yml", "The path to the configuration file.")
+	casesFile := flag.String("queries-file", "promql-compliance-cases.yml", "The path to the test cases to run.")
 	outputFormat := flag.String("output-format", "text", "The comparison output format. Valid values: [text, html, json]")
 	outputHTMLTemplate := flag.String("output-html-template", "./output/example-output.html", "The HTML template to use when using HTML as the output format.")
 	outputPassing := flag.Bool("output-passing", false, "Whether to also include passing test cases in the output.")
@@ -83,6 +85,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error loading configuration file: %v", err)
 	}
+
+	cases, err := config.LoadTestCasesFromFile(*casesFile)
+	if err != nil {
+		log.Fatalf("Error loading test cases file: %v", err)
+	}
 	refAPI, err := newPromAPI(cfg.ReferenceTargetConfig)
 	if err != nil {
 		log.Fatalf("Error creating reference API: %v", err)
@@ -99,7 +106,7 @@ func main() {
 		-getNonZeroDuration(cfg.QueryTimeParameters.RangeInSeconds, 10*time.Minute))
 	resolution := getNonZeroDuration(
 		cfg.QueryTimeParameters.ResolutionInSeconds, 10*time.Second)
-	expandedTestCases := testcases.ExpandTestCases(cfg.TestCases, cfg.QueryTweaks, start, end, resolution)
+	expandedTestCases := testcases.ExpandTestCases(cases.TestCases, cfg.QueryTweaks, start, end, resolution)
 
 	var wg sync.WaitGroup
 	results := make([]*comparer.Result, len(expandedTestCases))
@@ -127,6 +134,14 @@ func main() {
 	progressBar.Finish()
 
 	outp(results, *outputPassing, cfg.QueryTweaks)
+
+	// If any of tests failed, return 1.
+	for _, r := range results {
+		if !r.Success() {
+			os.Exit(1)
+		}
+	}
+	os.Exit(0)
 }
 
 func getTime(timeStr string, defaultTime time.Time) time.Time {
